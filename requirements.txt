@@ -1,0 +1,12 @@
+# Data handling and NCD math
+pandas>=2.0.0
+numpy>=1.24.0
+scipy>=1.10.0
+
+# Visualization and Phylogenetics
+toytree>=3.0.0
+toyplot>=2.0.0
+
+# Optional but recommended for progress bars
+tqdm>=4.65.0
+

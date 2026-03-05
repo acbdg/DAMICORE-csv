@@ -1,0 +1,49 @@
+import pandas as pd
+import numpy as np
+import lzma
+import toytree
+from scipy.spatial.distance import squareform
+from scipy.cluster.hierarchy import linkage, to_tree
+import os
+
+# --- NCD & Tree Logic ---
+def ncd(obj1, obj2):
+    s1, s2 = str(obj1).encode(), str(obj2).encode()
+    c1, c2 = len(lzma.compress(s1)), len(lzma.compress(s2))
+    c12 = len(lzma.compress(s1 + s2))
+    return (c12 - min(c1, c2)) / max(c1, c2)
+
+def get_newick(node, leaf_names):
+    if node.is_leaf():
+        return f"{leaf_names[node.id]}"
+    return f"({get_newick(node.left, leaf_names)},{get_newick(node.right, leaf_names)})"
+
+def generate_nj_tree(df):
+    cols = df.columns
+    n = len(cols)
+    dist_matrix = np.zeros((n, n))
+    for i in range(n):
+        for j in range(i + 1, n):
+            dist = ncd(df.iloc[:, i].tolist(), df.iloc[:, j].tolist())
+            dist_matrix[i, j] = dist_matrix[j, i] = dist
+    Z = linkage(squareform(dist_matrix), method='average')
+    return get_newick(to_tree(Z), cols.tolist()) + ";"
+
+# --- Execution ---
+csv_path = "your_data.csv"
+output_dir = "bootstrap_trees"
+os.makedirs(output_dir, exist_ok=True)
+
+df = pd.read_csv(csv_path).dropna()
+n_boots = 10 
+
+print(f"Generating {n_boots} trees...")
+for i in range(n_boots):
+    boot_df = df.sample(frac=1.0, replace=True)
+    nwk = generate_nj_tree(boot_df)
+    
+    # Save each tree to a separate file
+    with open(f"{output_dir}/tree_{i}.nwk", "w") as f:
+        f.write(nwk)
+    print(f"Saved tree_{i}.nwk")
+

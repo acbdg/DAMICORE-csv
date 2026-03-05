@@ -1,0 +1,12 @@
+# Environments
+damicore_venv/
+.env
+__pycache__/
+*.pyc
+
+# Data & Results (Large files)
+*.csv
+bootstrap_trees/
+consensus-trees/
+*.pdf
+

@@ -1,0 +1,7 @@
+python -c "import pandas as pd, re, unicodedata; \
+df = pd.read_csv('2026-Nellore-UNICAMP-SergioPflanzer.csv'); \
+clean = lambda t: re.sub(r'[^a-zA-Z0-9]+', '_', unicodedata.normalize('NFKD', str(t)).encode('ascii', 'ignore').decode('ascii')).strip('_'); \
+df.columns = [clean(c) for c in df.columns]; \
+df.to_csv('2026-Nellore-UNICAMP-SergioPflanzer_clean.csv', index=False)"
+(base) acbd@Alexandres-MacBook-Air raw-csv % ls ../clean-nonASCII.py 
+

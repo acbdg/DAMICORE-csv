@@ -1,0 +1,82 @@
+import pandas as pd
+import numpy as np
+import lzma
+import toytree
+import json
+import os
+from scipy.spatial.distance import squareform
+from scipy.cluster.hierarchy import linkage, to_tree
+
+def load_config(config_path="config.json"):
+    with open(config_path, "r") as f:
+        return json.load(f)
+
+def ncd(obj1, obj2, preset=6):
+    """Calculates NCD using LZMA with a configurable compression level."""
+    s1, s2 = str(obj1).encode(), str(obj2).encode()
+    
+    # We use the preset from the config file (1-9)
+    c1 = len(lzma.compress(s1, preset=preset))
+    c2 = len(lzma.compress(s2, preset=preset))
+    c12 = len(lzma.compress(s1 + s2, preset=preset))
+    
+    return (c12 - min(c1, c2)) / max(c1, c2)
+
+def get_newick(node, leaf_names):
+    """Recursive Newick generator."""
+    if node.is_leaf():
+        return f"{leaf_names[node.id]}"
+    return f"({get_newick(node.left, leaf_names)},{get_newick(node.right, leaf_names)})"
+
+def generate_nj_tree(df, config):
+    """Computes NCD and returns Newick string."""
+    cols = df.columns
+    n = len(cols)
+    dist_matrix = np.zeros((n, n))
+    
+    for i in range(n):
+        for j in range(i + 1, n):
+            dist = ncd(df.iloc[:, i].tolist(), 
+                       df.iloc[:, j].tolist(), 
+                       preset=config['compression_level'])
+            dist_matrix[i, j] = dist_matrix[j, i] = dist
+    
+    # Clustering method (average = UPGMA)
+    Z = linkage(squareform(dist_matrix), method=config['method'])
+    return get_newick(to_tree(Z), cols.tolist()) + ";"
+
+def main():
+    # 1. Load Parameters
+    cfg = load_config()
+    
+    # 2. Setup Environment
+    os.makedirs(cfg['output_directory'], exist_ok=True)
+    
+    # 3. Load Data
+    try:
+        df = pd.read_csv(cfg['input_csv'])
+        if cfg['drop_na']:
+            df = df.dropna()
+        if cfg['verbose']:
+            print(f"Loaded {cfg['input_csv']} with {len(df.columns)} columns.")
+    except Exception as e:
+        print(f"Error loading CSV: {e}")
+        return
+
+    # 4. Bootstrap Loop
+    for i in range(cfg['bootstrap_iterations']):
+        if cfg['verbose']:
+            print(f"Starting iteration {i+1}/{cfg['bootstrap_iterations']}...")
+            
+        boot_df = df.sample(frac=1.0, replace=True)
+        nwk = generate_nj_tree(boot_df, cfg)
+        
+        output_path = os.path.join(cfg['output_directory'], f"tree_{i}.nwk")
+        with open(output_path, "w") as f:
+            f.write(nwk)
+
+    print(f"\nCompleted. All trees saved to: {cfg['output_directory']}/")
+
+if __name__ == "__main__":
+    main()
+

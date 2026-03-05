@@ -1,0 +1,84 @@
+import pandas as pd
+import numpy as np
+import lzma
+import toytree
+from scipy.cluster.hierarchy import linkage, to_tree
+
+def ncd(obj1, obj2):
+    """Calculates Normalized Compression Distance using LZMA."""
+    # Convert lists to strings for compression
+    s1 = str(obj1).encode()
+    s2 = str(obj2).encode()
+    
+    c1 = len(lzma.compress(s1))
+    c2 = len(lzma.compress(s2))
+    c12 = len(lzma.compress(s1 + s2))
+    
+    # NCD Formula: (C(xy) - min(C(x), C(y))) / max(C(x), C(y))
+    return (c12 - min(c1, c2)) / max(c1, c2)
+
+from scipy.spatial.distance import squareform
+from scipy.cluster.hierarchy import linkage
+
+def generate_nj_tree(df):
+    """Computes NCD matrix and returns a ToyTree object using Scipy Linkage."""
+    cols = df.columns
+    n = len(cols)
+    dist_matrix = np.zeros((n, n))
+    
+    # 1. Calculate NCD for all pairs
+    for i in range(n):
+        for j in range(i + 1, n):
+            dist = ncd(df.iloc[:, i].tolist(), df.iloc[:, j].tolist())
+            dist_matrix[i, j] = dist_matrix[j, i] = dist
+    
+    # 2. Generate Linkage Matrix
+    # We use 'average' (UPGMA) as it's the standard for NCD distance trees
+    condensed_dist = squareform(dist_matrix)
+    Z = linkage(condensed_dist, method='average')
+    
+    # 3. FIX: Use the specific Linkage constructor for Toytree v3
+    # We pass the linkage matrix and the names (tips) together
+    tree = toytree.tree(Z, tree_format=0) # tree_format=0 helps specify input type
+    
+    # Assign names to the tips (leaves)
+    # In v3, we map the range(n) to the column names
+    name_dict = {i: name for i, name in enumerate(cols)}
+    tree = tree.set_node_data("name", data=name_dict)
+    
+    return tree    
+
+# --- MAIN EXECUTION ---
+
+# 1. Load the Spreadsheet
+csv_file = "your_data.csv"  # Replace with your actual file path
+try:
+    # Use low_memory=False for large spreadsheets
+    df = pd.read_csv(csv_file).dropna() 
+    print(f"Successfully loaded {csv_file} with {df.shape[1]} columns.")
+except FileNotFoundError:
+    print("File not found. Please check the path.")
+    # Fallback for testing
+    df = pd.DataFrame(np.random.randint(0,10,size=(100, 4)), columns=list('ABCD'))
+
+# 2. Bootstrapping Loop
+n_iterations = 10
+bootstrapped_trees = []
+
+print("Starting Bootstrap and NCD calculation...")
+for i in range(n_iterations):
+    # Sample rows with replacement (Bootstrapping)
+    boot_df = df.sample(frac=1.0, replace=True)
+    
+    # Generate tree for this sample
+    tree = generate_nj_tree(boot_df)
+    bootstrapped_trees.append(tree)
+    print(f"Iteration {i+1}/{n_iterations} complete.")
+
+# 3. Consensus Visualization with Toytree
+mtree = toytree.mtree(bootstrapped_trees)
+
+# Draw a 'cloud tree' to show the consensus and variance
+canvas, axes = mtree.draw_cloud_tree(fixed_order=True, color_style="vibrant")
+toytree.utils.show(canvas)
+

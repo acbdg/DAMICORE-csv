@@ -1,0 +1,10 @@
+{
+    "input_csv": "your_data.csv",
+    "output_directory": "bootstrap_trees",
+    "bootstrap_iterations": 10,
+    "compression_level": 6,
+    "method": "average",
+    "drop_na": true,
+    "verbose": true
+}
+

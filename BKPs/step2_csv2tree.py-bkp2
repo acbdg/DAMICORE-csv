@@ -1,0 +1,79 @@
+import pandas as pd
+import numpy as np
+import lzma
+import toytree
+
+import toyplot.pdf
+
+from scipy.spatial.distance import squareform
+from scipy.cluster.hierarchy import linkage, to_tree
+
+
+def ncd(obj1, obj2):
+    """Calculates Normalized Compression Distance using LZMA."""
+    s1, s2 = str(obj1).encode(), str(obj2).encode()
+    c1, c2 = len(lzma.compress(s1)), len(lzma.compress(s2))
+    c12 = len(lzma.compress(s1 + s2))
+    return (c12 - min(c1, c2)) / max(c1, c2)
+
+def get_newick(node, leaf_names):
+    """Recursively builds a Newick string from a Scipy ClusterNode."""
+    if node.is_leaf():
+        return f"{leaf_names[node.id]}"
+    else:
+        left = get_newick(node.left, leaf_names)
+        right = get_newick(node.right, leaf_names)
+        return f"({left},{right})"
+
+def generate_nj_tree(df):
+    """Computes NCD and returns a ToyTree via Newick string conversion."""
+    cols = df.columns
+    n = len(cols)
+    dist_matrix = np.zeros((n, n))
+    
+    # Calculate NCD matrix
+    for i in range(n):
+        for j in range(i + 1, n):
+            dist = ncd(df.iloc[:, i].tolist(), df.iloc[:, j].tolist())
+            dist_matrix[i, j] = dist_matrix[j, i] = dist
+    
+    # Linkage (UPGMA/Average)
+    Z = linkage(squareform(dist_matrix), method='average')
+    
+    # Convert Scipy linkage to Newick string
+    root_node = to_tree(Z)
+    newick_str = get_newick(root_node, cols.tolist()) + ";"
+    
+    # Load into toytree
+    return toytree.tree(newick_str)
+
+# --- EXECUTION ---
+csv_path = "your_data.csv"
+try:
+    df = pd.read_csv(csv_path).dropna()
+    print(f"Successfully loaded {csv_path} with {len(df.columns)} columns.")
+except Exception as e:
+    print(f"Error: {e}")
+    exit()
+
+n_boots = 5 # Start small to test
+all_trees = []
+
+print("Starting Bootstrap calculations...")
+for i in range(n_boots):
+    boot_df = df.sample(frac=1.0, replace=True)
+    tree = generate_nj_tree(boot_df)
+    all_trees.append(tree)
+    print(f"Iteration {i+1}/{n_boots} complete.")
+
+# Create the MultiTree
+mtree = toytree.mtree(all_trees)
+
+# Unpack 3 values (Canvas, Axes, Mark)
+canvas, axes, mark = mtree.draw_cloud_tree(fixed_order=True)
+
+# CORRECT WAY TO SAVE: Use the toyplot renderer
+toyplot.pdf.render(canvas, "consensus_tree.pdf")
+
+print("\nSuccess! Results saved to 'consensus_tree.pdf'.")
+

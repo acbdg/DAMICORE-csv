@@ -1,0 +1,19 @@
+{
+    "_metadata": {
+        "project": "DAMICORE Python 3",
+        "description": "Configuration for NCD-based Phylogenetic Tree Generation"
+    },
+    "_instructions": {
+        "compression_level": "Toggle between speed (1) and accuracy (9). Default is 6.",
+        "method": "Clustering algorithms: 'average' (UPGMA), 'single', 'complete', or 'ward'.",
+        "scalability": "To scale, swap 'input_csv' and 'output_directory' for different datasets."
+    },
+    "input_csv": "raw-csv/fake.csv",
+    "output_directory": "bootstrap_trees/fake/",
+    "bootstrap_iterations": 10,
+    "compression_level": 6,
+    "method": "average",
+    "drop_na": true,
+    "verbose": true
+}
+

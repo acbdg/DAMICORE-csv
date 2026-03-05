@@ -1,0 +1,44 @@
+import toytree
+import toyplot.pdf
+import glob
+import os
+
+# 1. Load all Newick files from the directory
+tree_files = glob.glob("bootstrap_trees/tree_*.nwk")
+if not tree_files:
+    print("No tree files found in 'bootstrap_trees/'")
+    exit()
+
+# Parse files into a list of ToyTree objects
+trees = [toytree.tree(f) for f in tree_files]
+mtree = toytree.mtree(trees)
+
+print(f"Processing {len(trees)} trees for consensus...")
+
+# 2. CREATE CLOUD TREE (Visualization)
+# Unpack 3 values for Toytree v3 compatibility
+canvas_cloud, axes_cloud, mark_cloud = mtree.draw_cloud_tree(fixed_order=True)
+toyplot.pdf.render(canvas_cloud, "cloud_tree_output.pdf")
+
+# 3. CREATE CONSENSUS TREE
+# This merges the bootstraps into one representative tree
+consensus = mtree.get_consensus_tree()
+
+# Save Consensus Visualization
+canvas_con, axes_con, mark_con = consensus.draw(ts='p')
+toyplot.pdf.render(canvas_con, "consensus_tree_output.pdf")
+
+# 4. SAVE NEWICK FILES
+# Save the consensus tree as a string
+with open("final_consensus.nwk", "w") as f:
+    f.write(consensus.write())
+
+# Optional: Save the combined 'MultiTree' as a multi-line Newick file
+with open("all_bootstraps_combined.nwk", "w") as f:
+    f.write("\n".join([t.write() for t in trees]))
+
+print("Done! Files generated:")
+print("- cloud_tree_output.pdf")
+print("- consensus_tree_output.pdf")
+print("- final_consensus.nwk"
+)

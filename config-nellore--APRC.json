@@ -1,0 +1,20 @@
+{
+    "_metadata": {
+        "project": "DAMICORE Python 3",
+        "description": "Configuration for NCD-based Phylogenetic Tree Generation"
+    },
+    "_instructions": {
+        "compression_level": "Toggle between speed (1) and accuracy (9). Default is 6.",
+        "method": "Clustering algorithms: 'average' (UPGMA), 'single', 'complete', or 'ward'.",
+        "directories": "bootstrap_output_dir stores raw .nwk files; consensus_output_dir stores final merged results."
+    },
+    "input_csv": "raw-csv/2026-Nellore-UNICAMP-SergioPflanzer.csv",
+    "bootstrap_output_dir": "bootstrap_trees/nellore",
+    "consensus_output_dir": "consensus-trees/nellore-cleaned-nonASCII/",
+    "bootstrap_iterations": 10,
+    "compression_level": 6,
+    "method": "average",
+    "drop_na": true,
+    "verbose": true
+}
+
