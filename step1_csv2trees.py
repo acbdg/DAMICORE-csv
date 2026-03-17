@@ -6,6 +6,10 @@ import json
 import os
 from scipy.spatial.distance import squareform
 from scipy.cluster.hierarchy import linkage, to_tree
+import concurrent.futures
+import multiprocessing
+from tqdm import tqdm
+
 
 # --- Configuration Loader ---
 def load_config(config_path="config.json"):
@@ -45,6 +49,24 @@ def generate_nj_tree(df, config):
     Z = linkage(squareform(dist_matrix), method=config['method'])
     return get_newick(to_tree(Z), cols.tolist()) + ";"
 
+
+def run_single_bootstrap(i, df, cfg):
+    """Function executed by each worker core"""
+    # 1. Sample with replacement
+    boot_df = df.sample(frac=1.0, replace=True)
+    
+    # 2. Generate tree (Assuming this function is defined in your script)
+    nwk = generate_nj_tree(boot_df, cfg)
+
+    # 3. Save the tree
+    file_name = f"tree_{i}.nwk"
+    output_path = os.path.join(cfg['bootstrap_output_dir'], file_name)
+    with open(output_path, "w") as f:
+        f.write(nwk)
+    
+    return f"✅ Tree {i} saved."
+
+
 # --- Execution ---
 def main():
     # 1. Load Parameters
@@ -55,8 +77,10 @@ def main():
     os.makedirs(cfg['consensus_output_dir'], exist_ok=True)
 
     # 3. Load and Clean Data
+    if cfg['verbose']:
+        print(f"Loading data")
     try:
-        df = pd.read_csv(cfg['input_csv'])
+        df = pd.read_csv(cfg['input_csv'], low_memory=False)
         if cfg['drop_na']:
             df = df.dropna()
         
@@ -68,23 +92,29 @@ def main():
 
     # 4. Bootstrap Loop
     n_boots = cfg['bootstrap_iterations']
-    print(f"Generating {n_boots} trees in '{cfg['bootstrap_output_dir']}'...")
-    
-    for i in range(n_boots):
-        # Sample with replacement
-        boot_df = df.sample(frac=1.0, replace=True)
-        nwk = generate_nj_tree(boot_df, cfg)
+    if cfg['verbose']:
+        print(f"Generating {n_boots} trees in '{cfg['bootstrap_output_dir']}'...")
+        print(f"🚀 Starting parallel bootstrap on M1...")    
 
-        # Save each tree using paths from config
-        file_name = f"tree_{i}.nwk"
-        output_path = os.path.join(cfg['bootstrap_output_dir'], file_name)
+        # Using 6 workers is ideal for 16GB RAM to avoid swapping
+        # while leaving 2 cores for system tasks.
+        with concurrent.futures.ProcessPoolExecutor(max_workers=6) as executor:
+        # We use a list comprehension to submit all jobs
+        # mapping the range(n_boots) to our function
+            futures = [executor.submit(run_single_bootstrap, i, df, cfg) for i in range(n_boots)]
         
-        with open(output_path, "w") as f:
-            f.write(nwk)
-            
+        # Monitor progress as they finish
+            for future in concurrent.futures.as_completed(futures):
+                try:
+                    result = future.result()
+                    # Optional: print(result) to see progress
+                except Exception as e:
+                    print(f"❌ Bootstrapping failed for an iteration: {e}")
+
         if cfg['verbose']:
             print(f"[{i+1}/{n_boots}] Saved {file_name}")
 
+    print("🏁 All bootstrap trees generated.")
     print(f"\nPhase 1 Complete. Raw trees are ready for Step 2 (Consensus).")
 
 if __name__ == "__main__":
